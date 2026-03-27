@@ -17,6 +17,7 @@ type Config struct {
 	TargetLang  string `yaml:"target_lang"`
 	LedgerDir   string `yaml:"ledger_dir"`
 	Model       string `yaml:"model"`
+	Conventions string `yaml:"conventions"`
 	Concurrency int    `yaml:"concurrency"`
 	MaxRetries  int    `yaml:"max_retries"`
 }

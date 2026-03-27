@@ -24,11 +24,15 @@ var runCmd = &cobra.Command{
 }
 
 var (
-	flagRunModel string
+	flagRunModel     string
+	flagNoCompile    bool
+	flagLint         bool
 )
 
 func init() {
 	runCmd.Flags().StringVar(&flagRunModel, "model", "", "LLM model to use (overrides config)")
+	runCmd.Flags().BoolVar(&flagNoCompile, "no-compile", false, "skip compile gate (translate only, verify later)")
+	runCmd.Flags().BoolVar(&flagLint, "lint", false, "use lightweight lint check instead of full compilation")
 	rootCmd.AddCommand(runCmd)
 }
 
@@ -54,11 +58,19 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Set up compiler
-	comp := compiler.ForLanguage(cfg.TargetLang)
+	// Set up compiler (nil if --no-compile, linter if --lint)
+	var comp compiler.Compiler
+	if flagLint {
+		comp = compiler.ForLint(cfg.TargetLang)
+	} else if !flagNoCompile {
+		comp = compiler.ForLanguage(cfg.TargetLang)
+	}
 
 	// Open ledger
-	ledgerDir := filepath.Join(root, cfg.LedgerDir)
+	ledgerDir := cfg.LedgerDir
+	if !filepath.IsAbs(ledgerDir) {
+		ledgerDir = filepath.Join(root, ledgerDir)
+	}
 	l := ledger.NewDolt(ledgerDir)
 
 	// Print summary before starting

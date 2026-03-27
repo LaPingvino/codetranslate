@@ -73,11 +73,12 @@ func (p *Pipeline) translateUnit(ctx context.Context, unit *ledger.Unit) error {
 		unit.Attempts = attempt + 1
 
 		req := &translator.Request{
-			SourceCode: unit.SourceCode,
-			SourceLang: p.Config.SourceLang,
-			TargetLang: p.Config.TargetLang,
-			Context:    depContext,
-			LastError:  unit.LastError,
+			SourceCode:  unit.SourceCode,
+			SourceLang:  p.Config.SourceLang,
+			TargetLang:  p.Config.TargetLang,
+			Context:     depContext,
+			Conventions: p.Config.Conventions,
+			LastError:   unit.LastError,
 		}
 
 		resp, err := p.Translator.Translate(ctx, req)
@@ -156,14 +157,35 @@ func (p *Pipeline) writeTranslation(unit *ledger.Unit) error {
 		return err
 	}
 
-	// If the target file exists, we need to append/merge rather than overwrite.
-	// For now, we use a simple approach: one file per source file, append.
+	marker := fmt.Sprintf("// [codetranslate] %s:%s", unit.SourceFile, unit.SourceName)
+	endMarker := fmt.Sprintf("// [/codetranslate] %s:%s", unit.SourceFile, unit.SourceName)
+	block := fmt.Sprintf("%s\n%s\n%s\n", marker, unit.Translation, endMarker)
+
+	// Read existing file and replace block if it exists, otherwise append
+	existing, err := os.ReadFile(targetPath)
+	if err == nil {
+		content := string(existing)
+		if idx := strings.Index(content, marker); idx >= 0 {
+			// Find end marker
+			if endIdx := strings.Index(content[idx:], endMarker); endIdx >= 0 {
+				endIdx += idx + len(endMarker)
+				// Skip trailing newline
+				if endIdx < len(content) && content[endIdx] == '\n' {
+					endIdx++
+				}
+				content = content[:idx] + block + content[endIdx:]
+				return os.WriteFile(targetPath, []byte(content), 0644)
+			}
+		}
+	}
+
+	// Append new block
 	f, err := os.OpenFile(targetPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	_, err = fmt.Fprintf(f, "\n// Translated from %s:%s\n%s\n", unit.SourceFile, unit.SourceName, unit.Translation)
+	_, err = fmt.Fprintf(f, "\n%s", block)
 	return err
 }

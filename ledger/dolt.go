@@ -144,7 +144,7 @@ func (d *DoltLedger) GetUnit(id string) (*Unit, error) {
 func (d *DoltLedger) NextUnit() (*Unit, error) {
 	rows, err := d.query(
 		`SELECT * FROM translation_units
-		 WHERE status IN ('todo', 'failed')
+		 WHERE status = 'todo'
 		 ORDER BY tier ASC, source_file ASC, source_name ASC
 		 LIMIT 1`,
 	)

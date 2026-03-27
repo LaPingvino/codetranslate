@@ -12,6 +12,37 @@ type Compiler interface {
 	Compile(ctx context.Context, dir string) error
 }
 
+// Linter runs lightweight syntax/lint checks without full compilation.
+type Linter struct {
+	Lang string
+}
+
+func (l *Linter) Compile(ctx context.Context, dir string) error {
+	switch {
+	case strings.Contains(strings.ToLower(l.Lang), "go"):
+		cmd := exec.CommandContext(ctx, "go", "vet", "./...")
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("go vet failed:\n%s", strings.TrimSpace(string(out)))
+		}
+	case strings.Contains(strings.ToLower(l.Lang), "c"):
+		// Use gcc -fsyntax-only for quick syntax check
+		cmd := exec.CommandContext(ctx, "sh", "-c",
+			fmt.Sprintf("find %s -name '*.c' -exec gcc -fsyntax-only -Wall {} +", dir))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("lint failed:\n%s", strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
+}
+
+// ForLint returns a lightweight linter for the given language.
+func ForLint(lang string) Compiler {
+	return &Linter{Lang: lang}
+}
+
 // GoCompiler compiles Go code.
 type GoCompiler struct{}
 
@@ -54,15 +85,18 @@ func (c *CCompiler) Compile(ctx context.Context, dir string) error {
 }
 
 // ForLanguage returns a compiler for the given target language.
+// ForLanguage returns a compiler for the given target language.
+// Matches flexibly: "c", "modern C (C11)", "C++", etc.
 func ForLanguage(lang string) Compiler {
-	switch strings.ToLower(lang) {
-	case "go", "golang":
+	lower := strings.ToLower(lang)
+	switch {
+	case lower == "go" || lower == "golang":
 		return &GoCompiler{}
-	case "c":
-		return &CCompiler{CC: "gcc"}
-	case "c++", "cpp":
-		return &CCompiler{CC: "g++"}
+	case strings.Contains(lower, "c++") || strings.Contains(lower, "cpp"):
+		return &CCompiler{CC: "g++", UseMake: true}
+	case strings.Contains(lower, "c"):
+		return &CCompiler{CC: "gcc", UseMake: true}
 	default:
-		return &GoCompiler{} // fallback
+		return &CCompiler{CC: "gcc", UseMake: true}
 	}
 }
