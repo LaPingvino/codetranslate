@@ -8,6 +8,9 @@ type Ledger interface {
 	// AddUnit adds a new translation unit. If it already exists (by ID), it is skipped.
 	AddUnit(u *Unit) error
 
+	// AddUnits adds multiple units in a single batch operation.
+	AddUnits(units []*Unit) (int, error)
+
 	// UpdateUnit updates an existing unit.
 	UpdateUnit(u *Unit) error
 

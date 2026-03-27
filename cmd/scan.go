@@ -31,7 +31,11 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sourceAbs, err := filepath.Abs(filepath.Join(root, cfg.SourceDir))
+	sourceDir := cfg.SourceDir
+	if !filepath.IsAbs(sourceDir) {
+		sourceDir = filepath.Join(root, sourceDir)
+	}
+	sourceAbs, err := filepath.Abs(sourceDir)
 	if err != nil {
 		return err
 	}
@@ -46,18 +50,19 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d translatable units\n", len(units))
 
-	// Open ledger and add units
-	ledgerDir := filepath.Join(root, cfg.LedgerDir)
+	// Open ledger and batch-add units
+	ledgerDir := cfg.LedgerDir
+	if !filepath.IsAbs(ledgerDir) {
+		ledgerDir = filepath.Join(root, ledgerDir)
+	}
 	l := ledger.NewDolt(ledgerDir)
 
-	added := 0
-	for _, u := range units {
-		if err := l.AddUnit(u); err != nil {
-			fmt.Printf("  warning: failed to add %s:%s: %v\n", u.SourceFile, u.SourceName, err)
-			continue
-		}
-		added++
+	fmt.Printf("Inserting into ledger...")
+	added, err := l.AddUnits(units)
+	if err != nil {
+		return fmt.Errorf("adding units: %w", err)
 	}
+	fmt.Printf(" done\n")
 
 	// Commit the scan
 	_ = l.Commit(fmt.Sprintf("scan: added %d units from %s", added, cfg.SourceDir))

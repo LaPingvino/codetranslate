@@ -77,6 +77,45 @@ func (d *DoltLedger) AddUnit(u *Unit) error {
 	return err
 }
 
+func (d *DoltLedger) AddUnits(units []*Unit) (int, error) {
+	if len(units) == 0 {
+		return 0, nil
+	}
+
+	// Build a single SQL statement with all inserts batched
+	// Process in chunks to avoid overly long SQL statements
+	const chunkSize = 50
+	added := 0
+	for i := 0; i < len(units); i += chunkSize {
+		end := i + chunkSize
+		if end > len(units) {
+			end = len(units)
+		}
+		chunk := units[i:end]
+
+		var b strings.Builder
+		b.WriteString("INSERT IGNORE INTO translation_units (id, source_file, source_name, source_lang, target_file, target_name, target_lang, kind, status, tier, source_code) VALUES ")
+		for j, u := range chunk {
+			u.ID = unitID(u)
+			if j > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s)",
+				quote(u.ID), quote(u.SourceFile), quote(u.SourceName), quote(u.SourceLang),
+				quote(u.TargetFile), quote(u.TargetName), quote(u.TargetLang),
+				quote(u.Kind), quote(string(u.Status)), u.Tier, quote(u.SourceCode),
+			)
+		}
+		b.WriteString(";")
+
+		if _, err := d.sql(b.String()); err != nil {
+			return added, fmt.Errorf("batch insert at offset %d: %w", i, err)
+		}
+		added += len(chunk)
+	}
+	return added, nil
+}
+
 func (d *DoltLedger) UpdateUnit(u *Unit) error {
 	q := fmt.Sprintf(
 		`UPDATE translation_units SET

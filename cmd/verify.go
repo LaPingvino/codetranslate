@@ -33,7 +33,11 @@ func runVerify(cmd *cobra.Command, args []string) error {
 	}
 
 	comp := compiler.ForLanguage(cfg.TargetLang)
-	targetAbs, _ := filepath.Abs(filepath.Join(root, cfg.TargetDir))
+	targetDir := cfg.TargetDir
+	if !filepath.IsAbs(targetDir) {
+		targetDir = filepath.Join(root, targetDir)
+	}
+	targetAbs, _ := filepath.Abs(targetDir)
 
 	fmt.Printf("Compiling %s code in %s...\n", cfg.TargetLang, targetAbs)
 
